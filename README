@@ -1,0 +1,93 @@
+- README - TEMA 1 APD - PARADIGMA MAPPER-REDUCER -
+
+Structuri de date:
+-> MapThreadArgs are campuri pentru:
+    - threadID,
+    - mapFiles care este un array de char* in care voi stoca
+    numele fisierelor de intrare,
+    - perfectNumbers, un vector de unordered set-uri, fiecare
+    set corespunzand unui exponent (stochez puterile perfecte
+    ale exponentului respectiv; folosesc unordered_set pentru
+    a elimina duplicatele),
+    - noFiles, numarul total de fisiere,
+    - noExponents, exponentul maxim (nrReducers + 1),
+    - mutex,
+    - barrier, bariera folosita la sincronizarea Mapperilor
+    si a Reducerilor
+
+-> ReduceThreadArgs are campuri pentru:
+    - threadID,
+    - noMappers, numarul de thread-uri Mapper
+    - lists, un vector de unordered_set, in care stochez
+    set-urile rezultate in urma operatiilor realizate de
+    Mapperi (toate seturile vor contine puterile perfecte
+    pentru exponentul de care trebuie sa se ocupe Reducerul),
+    - mutex,
+    - bariera pentru sincronizare
+
+Implementare:
+    Functionarea generala:
+    In main, retin argsM si argsR, 2 array-uri de tip
+MapThreadArgs si ReduceThreadArgs, de marime noMappers,
+respectiv NoReducers. Astfel fiecare thread va opera asupra
+structurii de date a fiecaruia.
+    Pentru fiecare thread Mapper i, se va popula structura
+de date argsM[i], ce va fi trimisa ca parametru functiei
+MapFunction. In mod similar se va actiona pentru Reduceri.
+    Fiecare Mapper va avea un vector de unordered_sets, set-ul N
+stocand puterile perfecte ale exponentului N. Mapperii vor
+citi fisierele de intrare si vor popula set-urile.
+    Fiecare Reducer va avea un vector de unordered_set, fiecare
+set continand rezulatele etapei de Map pentru un anumit exponent.
+
+    Sincronizarea thread-urilor Mapper si Reducer se
+realizeaza cu ajutorul unei bariere a carui counter va fi
+initializat cu valoarea noMappers + NoReducers. Astfel, chiar
+daca toate thread-urilor se creeaza simultan, Reducerii vor
+ajunge la bariera, vor incrementa counter-ul, dar vor fi
+blocati pana in momentul in care toti Mapperii apeleaza
+pthread_barrier_wait. In acel moment, bariera "se ridica"
+si thread-urile care erau blocate se deblocheaza.
+
+    Functia MapFunction este functia de thread folosita de
+thread-urile de tip Mapper. Fiecare thread Mapper citeste
+cate un fisier de intrare. Impartirea fisierelor se
+realizeaza dinamic, folosind o variabila currentFile trimisa
+ca parametru functiei prin structura de date MapThreadArgs.
+Astfel, intr-o bucla while fiecare thread va verifica daca
+valoarea lui currentFile este mai mica decat numarul total
+de fisiere (noFiles, trimisa similar ca parametru prin 
+aceeasi structura). Daca mai sunt fisiere de citit, thread-ul
+retine valoarea lui currentFile intr-o variabila locala si 
+incrementeaza valoarea lui currentFile. Cum zona de memorie
+a variabilei currentFile este vizibila si accesata de toate
+thread-urile Mappers, am folosit un mutex pentru a evita
+un race condition ce ar provoca un comportament nedeterminist
+in ceea ce priveste valoarea varibilei.
+    Fisierul este citit linie cu linie. Fiecare numar citit
+este prelucrat: pentru fiecare exponent de la 2 la
+nrReducers + 1, se apeleaza functia isPower (care verifica
+daca numarul poate fi scris ca si un x ^ exponent). Daca
+apelul functiei returneaza true, inseamna ca numarul curent 
+este o putere perfecta si este introdus in unordered set-ul
+corespunzator exponentului.
+    La finalul functiei este apelat pthread_barrier_wait,
+necesar la blocarea thread-urilor Reducer pana la finalul
+executiei tuturor thread-urilor Mapper.
+
+    Functia ReduceFunction este functia folosita de thread-urile
+Reducer. La inceputul functiei, thread-urile Reducer apeleaza
+pthread_barrier_wait si se blocheaza pana la finalizarea
+actiunilor Mapperilor, realizandu-se astfel sincronizarea.
+    Fiecare Reducer va pune intr-un unordered set elementele
+mapate de Mappers pentru exponentul corespunzator. Apoi 
+scrie intr-un fisier cu numele de forma outExponent.txt
+numarul de elemente din set (numarul de puteri perfecte
+distincte pentru un anumit exponent). In aceasta functie nu 
+mai este nevoie de niciun mecanism de sincronizare intre
+thread-uri (in afara de bariera), deoarece fiecare Reducer
+va reduce set-urile pentru un anumit exponent. Doi reduceri
+nu vor avea asignat acelasi exponent. Similar si pentru
+scrierea in fisiere.
+
+
